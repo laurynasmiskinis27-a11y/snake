@@ -21,7 +21,6 @@ class Food {
             let x = Math.floor(randX * gridSize);
             let y = Math.floor(randY * gridSize);
 
-            // Double-check randomness didn’t produce NaN or Infinity (extremely rare, but possible after bundler bugs)
             if (isNaN(x) || !isFinite(x)) {
                 x = 0;
             }
