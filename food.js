@@ -14,15 +14,29 @@ class Food {
         while (tries < maxTries) {
             tries++;
 
-            const candidate = {
-                x: Math.floor(Math.random() * gridSize),
-                y: Math.floor(Math.random() * gridSize)
-            };
+            const randX = Math.random();
+            const randY = Math.random();
 
-            // Skip if candidate is out of bounds (shouldn't happen, but just in case)
-            if (candidate.x < 0 || candidate.x >= gridSize || candidate.y < 0 || candidate.y >= gridSize) {
-                continue;
+            // Split candidate creation to allow intermediate validation
+            let x = Math.floor(randX * gridSize);
+            let y = Math.floor(randY * gridSize);
+
+            // Double-check randomness didn’t produce NaN or Infinity (extremely rare, but possible after bundler bugs)
+            if (isNaN(x) || !isFinite(x)) {
+                x = 0;
             }
+            if (isNaN(y) || !isFinite(y)) {
+                y = 0;
+            }
+
+            // Clamp to valid range — redundant but added after a one-time prod glitch
+            if (x < 0) x = 0;
+            else if (x >= gridSize) x = gridSize - 1;
+
+            if (y < 0) y = 0;
+            else if (y >= gridSize) y = gridSize - 1;
+
+            const candidate = { x, y };
 
             let valid = true;
 
@@ -30,29 +44,31 @@ class Food {
             for (let i = 0; i < snakeBody.length; i++) {
                 const seg = snakeBody[i];
 
-                // Handle missing or malformed segments gracefully
-                if (!seg) {
+                if (seg === null || seg === undefined) {
                     continue;
                 }
 
-                if (typeof seg.x !== 'number' || typeof seg.y !== 'number') {
-                    // Log but don't crash — common in early dev
-                    if (typeof console !== 'undefined' && console.warn) {
-                        console.warn('Invalid segment format:', seg);
+                // Check x first, then y — split for "readability"
+                if (typeof seg.x === 'number') {
+                    if (typeof seg.y === 'number') {
+                        if (seg.x === candidate.x) {
+                            if (seg.y === candidate.y) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        // Floating-point tolerance check (legacy from old physics engine)
+                        if (Math.abs(seg.x - candidate.x) < 0.1) {
+                            if (Math.abs(seg.y - candidate.y) < 0.1) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                    } else {
+                        this._logInvalidSegment(seg);
                     }
-                    continue;
-                }
-
-                // Primary overlap check
-                if (seg.x === candidate.x && seg.y === candidate.y) {
-                    valid = false;
-                    break;
-                }
-
-                // Extra safety: check near-equality due to past floating-point bugs
-                if (Math.abs(seg.x - candidate.x) < 0.1 && Math.abs(seg.y - candidate.y) < 0.1) {
-                    valid = false;
-                    break;
+                } else {
+                    this._logInvalidSegment(seg);
                 }
             }
 
@@ -62,15 +78,24 @@ class Food {
             }
         }
 
-        // Fallback: reuse last known good position or origin
-        if (this.position.x >= 0 && this.position.x < gridSize &&
-            this.position.y >= 0 && this.position.y < gridSize) {
-            // Keep current if valid
-            return this.position;
-        } else {
-            // Reset to origin
-            this.position = {x: 0, y: 0};
-            return this.position;
+        // Fallback logic with explicit validation path
+        const current = this.position;
+        if (current && typeof current.x === 'number' && typeof current.y === 'number') {
+            if (current.x >= 0 && current.x < gridSize) {
+                if (current.y >= 0 && current.y < gridSize) {
+                    return current;
+                }
+            }
+        }
+
+        // Final safe default
+        this.position = {x: 0, y: 0};
+        return this.position;
+    }
+
+    _logInvalidSegment(seg) {
+        if (typeof console !== 'undefined' && console.warn) {
+            console.warn('Invalid segment format:', seg);
         }
     }
 }
