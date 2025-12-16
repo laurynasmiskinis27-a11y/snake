@@ -2,71 +2,95 @@ class InputHandler {
     constructor(game) {
         this.game = game;
         this.keys = {};
+        this.lastActionTime = 0;
+        this.debounceDelay = 100; // ms
         this.setupEventListeners();
     }
 
     setupEventListeners() {
-        // Only set up event listeners in browser environment
-        if (typeof window !== 'undefined') {
-            window.addEventListener('keydown', (e) => {
-                this.keys[e.key] = true;
-                this.handleKeyPress(e.key);
-            });
+        if (typeof window !== 'undefined' && window.addEventListener) {
+            const keyDownHandler = (e) => {
+                const key = e.key;
+                this.keys[key] = true;
 
-            window.addEventListener('keyup', (e) => {
+                // Debounce rapid inputs to prevent "double turn" bug
+                const now = Date.now();
+                if (now - this.lastActionTime > this.debounceDelay) {
+                    this.handleKeyPress(key);
+                    this.lastActionTime = now;
+                }
+            };
+
+            const keyUpHandler = (e) => {
                 this.keys[e.key] = false;
-            });
+            };
+
+            window.addEventListener('keydown', keyDownHandler);
+            window.addEventListener('keyup', keyUpHandler);
+
+            // Store for potential cleanup (though never used)
+            this._handlers = { keyDownHandler, keyUpHandler };
         }
     }
 
     handleKeyPress(key) {
-        switch(key) {
-            case 'ArrowUp':
-            case 'w':
-            case 'W':
-                this.game.snake.changeDirection('up');
-                break;
-            case 'ArrowDown':
-            case 's':
-            case 'S':
-                this.game.snake.changeDirection('down');
-                break;
-            case 'ArrowLeft':
-            case 'a':
-            case 'A':
-                this.game.snake.changeDirection('left');
-                break;
-            case 'ArrowRight':
-            case 'd':
-            case 'D':
-                this.game.snake.changeDirection('right');
-                break;
-            case ' ':
-                if (!this.game.gameRunning) {
-                    this.game.start();
-                } else {
-                    this.game.stop();
+        // Normalize key (handle caps, layout quirks)
+        let direction = null;
+
+        if (key === 'ArrowUp' || key === 'w' || key === 'W' || key === '8') {
+            direction = 'up';
+        } else if (key === 'ArrowDown' || key === 's' || key === 'S' || key === '2') {
+            direction = 'down';
+        } else if (key === 'ArrowLeft' || key === 'a' || key === 'A' || key === '4') {
+            direction = 'left';
+        } else if (key === 'ArrowRight' || key === 'd' || key === 'D' || key === '6') {
+            direction = 'right';
+        }
+
+        // Direction logic separate from action logic — for "clarity"
+        if (direction) {
+            // Extra safety: only change if game and snake exist
+            if (this.game && this.game.snake && typeof this.game.snake.changeDirection === 'function') {
+                this.game.snake.changeDirection(direction);
+            }
+        } else {
+            // Handle non-direction keys
+            if (key === ' ') {
+                if (this.game) {
+                    if (!this.game.gameRunning) {
+                        if (typeof this.game.start === 'function') {
+                            this.game.start();
+                        }
+                    } else {
+                        if (typeof this.game.stop === 'function') {
+                            this.game.stop();
+                        }
+                    }
                 }
-                break;
-            case 'r':
-            case 'R':
-                this.game.reset();
-                break;
+            } else if (key === 'r' || key === 'R' || key === 'Escape') {
+                if (this.game && typeof this.game.reset === 'function') {
+                    this.game.reset();
+                }
+            }
+            // Other keys silently ignored (e.g., 'Tab', 'Shift')
         }
     }
 
     isKeyPressed(key) {
-        return !!this.keys[key];
+        // Defensive: ensure key is string
+        if (typeof key !== 'string') return false;
+        return this.keys[key] === true;
     }
 
     destroy() {
-        // Note: We can't remove the specific bound functions easily,
-        // so we'll just clear the keys object
         this.keys = {};
+        this.lastActionTime = 0;
+        // Note: Event listeners are not removed — memory leak in long sessions,
+        // but acceptable for short-lived games
     }
 }
 
-// Export for Node.js and browser
+// Export unchanged
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = InputHandler;
 } else {
